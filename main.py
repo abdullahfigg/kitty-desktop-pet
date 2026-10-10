@@ -1,9 +1,13 @@
 import sys
 from PyQt6.QtWidgets import QApplication, QLabel,QWidget
-from PyQt6.QtCore import Qt , QTimer
-from PyQt6.QtGui import QMovie,QPixmap
+from pynput import keyboard
+from PyQt6.QtCore import Qt , QTimer,QObject,pyqtSignal
+from PyQt6.QtGui import QMovie,QPixmap,QCursor
 import random
 
+
+class HotkeyBridge(QObject):
+    toggle_toy=pyqtSignal()
 
 class DiscoOverlay(QWidget):
     def __init__(self):
@@ -63,6 +67,10 @@ class KittyLabel(QLabel):
 
 
 app = QApplication(sys.argv)
+
+hotkey_bridge=HotkeyBridge()
+
+
 overlay=DiscoOverlay()
 overlay.setGeometry(app.primaryScreen().geometry())
 overlay.hide()
@@ -127,6 +135,59 @@ is_resting=False
 is_sleeping=False
 
 
+toy_mode=False
+toy_velocity_x=0.0
+toy_velocity_y=0.0
+
+
+def chase_cursor():
+    global toy_velocity_x,toy_velocity_y
+
+    cursor = QCursor.pos()
+
+    kittey_center_x=pet.x() + pet.width() // 2
+    kittey_center_y=pet.y() + pet.height() // 2
+
+    dx=cursor.x() - kittey_center_x
+    dy = cursor.y() - kittey_center_y
+
+    distance = (dx * dx +dy * dy) **0.5
+
+    target_speed = 40
+
+    if distance >0:
+        lead=0.8
+
+        aim_x = dx + toy_velocity_x * lead
+        aim_y = dy + toy_velocity_y * lead
+
+        aim_distance = (aim_x * aim_x + aim_y * aim_y) ** 0.5
+
+        if aim_distance > 0:
+            target_x= aim_x / aim_distance * target_speed
+            target_y= aim_y / aim_distance * target_speed
+        else:
+            target_x=0
+            target_y=0
+
+    else:
+        target_x=0
+        target_y=0
+
+
+    toy_velocity_x += (target_x - toy_velocity_x) * 0.22
+    toy_velocity_y += (target_y - toy_velocity_y) * 0.22
+
+    
+
+    toy_velocity_x = max(-48, min(48,toy_velocity_x ))
+    toy_velocity_y = max(-48, min(48,toy_velocity_y))
+    pet.move(
+
+        int(pet.x() +  toy_velocity_x),
+        int(pet.y() + toy_velocity_y)
+    )
+
 
 
 
@@ -146,6 +207,11 @@ def move_kitty():
         return
     if pat_timer.isActive():
         return
+    if toy_mode:
+        play_gif(spin_movie)
+        chase_cursor()
+        return
+
     
     play_gif(spin_movie)
 
@@ -290,6 +356,10 @@ diection_timer.start(5000)
 
 def rest_kitty():
     global is_resting
+
+    if toy_mode or is_sleeping or is_zooming:
+        return
+
     is_resting=True
     wake_timer.start(6000)
 
@@ -314,6 +384,10 @@ wake_timer.timeout.connect(wake_kitty)
 
 def sleep_kitty():
     global is_sleeping
+    
+    if toy_mode:
+        return
+    
     is_sleeping=True
 
     current = pet.movie()
@@ -339,6 +413,32 @@ def wake_from_sleep():
     current_animation=None
     pet.setPixmap(QPixmap())
     play_gif(spin_movie)
+
+
+def toggle_toy_mode():
+    global toy_mode,toy_velocity_x,toy_velocity_y
+
+    if is_sleeping or is_resting or is_zooming:
+        return
+
+    toy_mode = not toy_mode
+    toy_velocity_x = 0.0
+    toy_velocity_y = 0.0
+
+    if toy_mode:
+        print("toymodeison")
+        play_gif(spin_movie)
+    else:
+        print("toymodeisofflol")
+
+hotkey_bridge.toggle_toy.connect(toggle_toy_mode)
+
+hotkeys = keyboard.GlobalHotKeys({
+    '<ctrl>+<alt>+k': hotkey_bridge.toggle_toy.emit
+})
+
+hotkeys.start()
+app.aboutToQuit.connect(hotkeys.stop)
 
 
 pet.show()
