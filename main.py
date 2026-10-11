@@ -1,13 +1,32 @@
 import sys
-from PyQt6.QtWidgets import QApplication, QLabel,QWidget
+import os
+from PyQt6.QtWidgets import (
+      QApplication,
+      QLabel,
+      QWidget,
+      QPushButton,
+      QVBoxLayout,
+      QSystemTrayIcon,
+      QMenu
+    )
 from pynput import keyboard
-from PyQt6.QtCore import Qt , QTimer,QObject,pyqtSignal
+from PyQt6.QtCore import Qt , QTimer,QObject,pyqtSignal,QEvent  
 from PyQt6.QtGui import QMovie,QPixmap,QCursor
+from PyQt6.QtGui import QAction,QIcon
 import random
+
+def resource_path(filename):
+    if hasattr(sys,"_MEIPASS"):
+        base_path= sys._MEIPASS
+    else:
+        base_path = os.path.dirname(os.path.abspath(__file__))
+
+    return os.path.join(base_path,filename)
 
 
 class HotkeyBridge(QObject):
     toggle_toy=pyqtSignal()
+    quit_kitty = pyqtSignal()
 
 class DiscoOverlay(QWidget):
     def __init__(self):
@@ -65,8 +84,116 @@ class KittyLabel(QLabel):
             self.releaseMouse()
 
 
+class ControlPanel(QWidget):
+    def __init__(self):
+        super().__init__()
+
+    
+
+        self.setWindowTitle("kitty controls")
+        self.setFixedSize(260,320)
+
+        layout = QVBoxLayout()
+        self.setLayout(layout)
+
+        title = QLabel("🐈 Kitty Controls")
+        layout.addWidget(title)
+
+        self.play_button = QPushButton("playmode")
+        self.zoomies_button = QPushButton("Zoomies")
+        self.sleep_button = QPushButton("sleep / wake")
+        self.rest_button = QPushButton("rest / resume")
+        self.pat_button = QPushButton("pat kitty")
+        self.quit_button = QPushButton("Quit kitty")
+        
+        self.play_button.clicked.connect(toggle_toy_mode)
+        self.zoomies_button.clicked.connect(zoomies)
+        self.pat_button.clicked.connect(pat_kitty)
+        self.sleep_button.clicked.connect(toggle_sleep)
+        self.rest_button.clicked.connect(toggle_rest)
+        self.quit_button.clicked.connect(app.quit)
+
+        self.tray = QSystemTrayIcon(self)
+
+        self.tray.setToolTip("kitty desktop pet")
+
+        tray_menu = QMenu()
+
+        open_action = QAction("open kitty controls", self)
+        open_action.triggered.connect(self.show)
+
+        quit_action = QAction("Quit kitty", self)
+        quit_action.triggered.connect(quit_kitty)
+
+        tray_menu.addAction(open_action)
+        tray_menu.addSeparator()
+        tray_menu.addAction(quit_action)
+
+        self.tray.setContextMenu(tray_menu)
+        self.tray.activated.connect(self.tray_clicked)
+        self.tray.setIcon(QIcon(resource_path("kitty_icon.ico")))
+        self.tray.show()
+
+        layout.addWidget(self.play_button)
+        layout.addWidget(self.zoomies_button)
+        layout.addWidget(self.sleep_button)
+        layout.addWidget(self.rest_button)
+        layout.addWidget(self.pat_button)
+        layout.addWidget(self.quit_button)
+
+    def closeEvent(self,event):
+                    event.ignore()
+                    self.hide()   
+
+    def tray_clicked(self,reason):
+        if reason == QSystemTrayIcon.ActivationReason.Trigger:
+            self.showNormal()
+            self.raise_()
+            self.activateWindow()
+
+        
+    def changeEvent(self, event):
+        if event.type() == QEvent.Type.WindowStateChange:
+            if self.isMinimized():
+                self.hide()
+        super().changeEvent(event)
+            
+
+
+def toggle_sleep():
+    if is_sleeping:
+        wake_from_sleep()
+    else:
+        sleep_kitty()
+
+
+def toggle_rest():
+    if is_resting:
+        wake_kitty()
+    else:
+        rest_kitty()
+
 
 app = QApplication(sys.argv)
+def quit_kitty():
+    timer.stop()
+    speedtimer.stop()
+    diection_timer.stop()
+    rest_timer.stop()
+    wake_timer.stop()
+    sleep_timer.stop()
+    pat_timer.stop()
+    click_timer.stop()
+    disco_timer.stop()
+    zoom_timer.stop()
+
+    overlay.hide()
+    pet.hide()
+    control_pannel.tray.hide()
+    control_pannel.hide()
+
+    hotkeys.stop()
+    app.quit()
 
 hotkey_bridge=HotkeyBridge()
 
@@ -76,11 +203,10 @@ overlay.setGeometry(app.primaryScreen().geometry())
 overlay.hide()
 pet=KittyLabel("")
 
-
-spin_movie=QMovie("kitty_spin.gif")
-stand_movie=QMovie("kitty_stand.gif")
-pat_movie = QMovie("kitty_pat.gif")
-sleep_pixmap = QPixmap("kitty_sleep.png")
+spin_movie = QMovie(resource_path("kitty_spin.gif"))
+stand_movie = QMovie(resource_path("kitty_stand.gif"))
+pat_movie = QMovie(resource_path("kitty_pat.gif"))
+sleep_pixmap = QPixmap(resource_path("kitty_sleep.png"))
 
 current_animation=None
 
@@ -177,8 +303,6 @@ def chase_cursor():
 
     toy_velocity_x += (target_x - toy_velocity_x) * 0.22
     toy_velocity_y += (target_y - toy_velocity_y) * 0.22
-
-    
 
     toy_velocity_x = max(-48, min(48,toy_velocity_x ))
     toy_velocity_y = max(-48, min(48,toy_velocity_y))
@@ -432,13 +556,19 @@ def toggle_toy_mode():
         print("toymodeisofflol")
 
 hotkey_bridge.toggle_toy.connect(toggle_toy_mode)
+hotkey_bridge.quit_kitty.connect(quit_kitty)
 
 hotkeys = keyboard.GlobalHotKeys({
-    '<ctrl>+<alt>+k': hotkey_bridge.toggle_toy.emit
+    '<ctrl>+<alt>+k': hotkey_bridge.toggle_toy.emit,
+    '<ctrl>+<alt>+q': hotkey_bridge.quit_kitty.emit
+
 })
 
 hotkeys.start()
 app.aboutToQuit.connect(hotkeys.stop)
+
+control_pannel= ControlPanel()
+control_pannel.show()
 
 
 pet.show()
