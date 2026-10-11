@@ -58,13 +58,13 @@ Show / Hide Kitty
 
 Check the configured shortcut in your version
 
-Quit Kitty
+**Quit Kitty = ctrl + alt + Q**
 
 Check the configured shortcut in your version
 
 Shortcut keys may depend on the current application configuration. The mappings above should be updated with the actual keys before release.
 
-🧶 Toys & Special Modes
+🧶 Toys & Special Modes | ctrl + alt + K
 
 Toy chasing: Activate toy mode to let Kitty chase the cursor or toy.
 
